@@ -32,11 +32,7 @@ func (self *Node) Values() (ListIterator, error) {
     if err := self.should(types.V_ARRAY, "an array"); err != nil {
         return ListIterator{}, err
     }
-    return self.values(), nil
-}
-
-func (self *Node) values() ListIterator {
-    return ListIterator{Iterator{p: self}}
+    return ListIterator{Iterator{p: self}}, nil
 }
 
 // Properties returns iterator for object's children traversal
@@ -44,11 +40,7 @@ func (self *Node) Properties() (ObjectIterator, error) {
     if err := self.should(types.V_OBJECT, "an object"); err != nil {
         return ObjectIterator{}, err
     }
-    return self.properties(), nil
-}
-
-func (self *Node) properties() ObjectIterator {
-    return ObjectIterator{Iterator{p: self}}
+    return ObjectIterator{Iterator{p: self}}, nil
 }
 
 type Iterator struct {
@@ -122,7 +114,7 @@ next_start:
     } else {
         n := self.p.pairAt(self.i)
         self.i++
-        if n == nil || !n.Value.Exists() {
+        if !n.Value.Exists() {
             goto next_start
         }
         return n

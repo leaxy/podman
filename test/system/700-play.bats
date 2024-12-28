@@ -660,35 +660,17 @@ spec:
       image: $IMAGE
       command:
       - top
-      - -b
 " > $fname
 
-    # Run in background, then wait for pod to start running.
-    # This guarantees that when we send the signal (below) we do so
-    # on a running container; signaling during initialization
-    # results in undefined behavior.
-    logfile=$PODMAN_TMPDIR/kube-play.log
-    $PODMAN kube play --wait $fname &> $logfile &
-    local kidpid=$!
-
-    for try in {1..10}; do
-        run_podman '?' container inspect --format '{{.State.Running}}' "$podname-$ctrname"
-        if [[ $status -eq 0 ]] && [[ "$output" = "true" ]]; then
-            break
-        fi
-        sleep 1
-    done
-    wait_for_output "Mem:" "$podname-$ctrname"
-
-    # Send SIGINT to container, and see how long it takes to exit.
+    # force a timeout to happen so that the kube play command is killed
+    # and expect the timeout code 124 to happen so that we can clean up
     local t0=$SECONDS
-    kill -2 $kidpid
-    wait $kidpid
+    PODMAN_TIMEOUT=2 run_podman 124 kube play --wait $fname
     local t1=$SECONDS
     local delta_t=$((t1 - t0))
 
     # Expectation (in seconds) of when we should time out. When running
-    # parallel, allow longer time due to system load
+    # parallel, allow 4 more seconds due to system load
     local expect=4
     if [[ -n "$PARALLEL_JOBSLOT" ]]; then
         expect=$((expect + 4))
@@ -696,8 +678,7 @@ spec:
     assert $delta_t -le $expect \
            "podman kube play did not get killed within $expect seconds"
     # Make sure we actually got SIGTERM and podman printed its message.
-    assert "$(< $logfile)" =~ "Cleaning up containers, pods, and volumes" \
-           "kube play printed sigterm message"
+    assert "$output" =~ "Cleaning up containers, pods, and volumes" "kube play printed sigterm message"
 
     # there should be no containers running or created
     run_podman ps -a --noheading
@@ -1000,14 +981,6 @@ _EOF
 
     # Remove the local image to make sure it will be pulled again
     run_podman image rm --ignore $from_image
-
-    # The error below assumes unqualified-search registries exist, however the default
-    # distro config may not set some and thus resulting in a different error message.
-    # We could try to match a third or or simply force a know static config to trigger
-    # the right error.
-    local CONTAINERS_REGISTRIES_CONF="$PODMAN_TMPDIR/registries.conf"
-    echo 'unqualified-search-registries = ["quay.io"]' > "$CONTAINERS_REGISTRIES_CONF"
-    export CONTAINERS_REGISTRIES_CONF
 
     _write_test_yaml command=id image=$userimage
     run_podman 125 play kube --build --start=false $TESTYAML

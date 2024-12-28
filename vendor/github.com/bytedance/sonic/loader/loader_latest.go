@@ -1,4 +1,5 @@
-// +build go1.16,!go1.23
+//go:build go1.16 && !go1.22
+// +build go1.16,!go1.22
 
 /*
  * Copyright 2021 ByteDance Inc.
@@ -19,7 +20,7 @@
 package loader
 
 import (
-    `github.com/bytedance/sonic/loader/internal/rt`
+    `github.com/bytedance/sonic/internal/rt`
 )
 
 // LoadFuncs loads only one function as module, and returns the function pointer

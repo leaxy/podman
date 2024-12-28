@@ -1,4 +1,4 @@
-// +build amd64,go1.16,!go1.23
+// +build amd64,go1.16,!go1.22
 
 /*
  * Copyright 2021 ByteDance Inc.
@@ -60,9 +60,6 @@ func (cfg Config) Froze() API {
     }
     if cfg.NoValidateJSONMarshaler {
         api.encoderOpts |= encoder.NoValidateJSONMarshaler
-    }
-    if cfg.NoEncoderNewline {
-        api.encoderOpts |= encoder.NoEncoderNewline
     }
 
     // configure decoder options:

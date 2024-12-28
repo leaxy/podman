@@ -559,7 +559,15 @@ func ConvertContainer(container *parser.UnitFile, isUser bool, unitsInfoMap map[
 		}
 	}
 
-	containerName := getContainerName(container)
+	containerName, ok := container.Lookup(ContainerGroup, KeyContainerName)
+	if !ok || len(containerName) == 0 {
+		// By default, We want to name the container by the service name
+		if strings.Contains(container.Filename, "@") {
+			containerName = "systemd-%p_%i"
+		} else {
+			containerName = "systemd-%N"
+		}
+	}
 
 	// Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
 	service.Add(ServiceGroup, "Environment", "PODMAN_SYSTEMD_UNIT=%n")
@@ -860,37 +868,14 @@ func ConvertContainer(container *parser.UnitFile, isUser bool, unitsInfoMap map[
 
 	service.AddCmdline(ServiceGroup, "ExecStart", podman.Args)
 
-	return service, nil
-}
-
-// Get the unresolved container name that may contain '%'.
-func getContainerName(container *parser.UnitFile) string {
-	containerName, ok := container.Lookup(ContainerGroup, KeyContainerName)
-	if !ok || len(containerName) == 0 {
-		// By default, We want to name the container by the service name.
-		if strings.Contains(container.Filename, "@") {
-			containerName = "systemd-%p_%i"
-		} else {
-			containerName = "systemd-%N"
-		}
-	}
-	return containerName
-}
-
-// Get the resolved container name that contains no '%'.
-// Returns an empty string if not resolvable.
-func GetContainerResourceName(container *parser.UnitFile) string {
-	containerName := getContainerName(container)
-
 	// XXX: only %N is handled.
 	// it is difficult to properly implement specifiers handling without consulting systemd.
-	resourceName := strings.ReplaceAll(containerName, "%N", GetContainerServiceName(container))
-
+	resourceName := strings.ReplaceAll(containerName, "%N", unitInfo.ServiceName)
 	if !strings.Contains(resourceName, "%") {
-		return resourceName
-	} else {
-		return ""
+		unitInfo.ResourceName = resourceName
 	}
+
+	return service, nil
 }
 
 func defaultOneshotServiceGroup(service *parser.UnitFile, remainAfterExit bool) {
@@ -1412,15 +1397,10 @@ func ConvertBuild(build *parser.UnitFile, unitsInfoMap map[string]*UnitInfo, isU
 	podman := createBasePodmanCommand(build, BuildGroup)
 	podman.add("build")
 
-	// The `--pull` flag has to be handled separately and the `=` sign must be present
-	// See https://github.com/containers/podman/issues/24599 for details
-	if val, ok := build.Lookup(BuildGroup, KeyPull); ok && len(val) > 0 {
-		podman.addf("--pull=%s", val)
-	}
-
 	stringKeys := map[string]string{
 		KeyArch:     "--arch",
 		KeyAuthFile: "--authfile",
+		KeyPull:     "--pull",
 		KeyTarget:   "--target",
 		KeyVariant:  "--variant",
 	}

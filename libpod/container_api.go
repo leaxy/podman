@@ -116,11 +116,10 @@ func (c *Container) Start(ctx context.Context, recursive bool) (finalErr error) 
 }
 
 // Update updates the given container.
-// Either resource limits, restart policies, or HealthCheck configuration can be updated.
-// Either resources, restartPolicy or changedHealthCheckConfiguration must not be nil.
+// Either resource limits or restart policy can be updated.
+// Either resources or restartPolicy must not be nil.
 // If restartRetries is not nil, restartPolicy must be set and must be "on-failure".
-// Nil values of changedHealthCheckConfiguration are not updated.
-func (c *Container) Update(resources *spec.LinuxResources, restartPolicy *string, restartRetries *uint, changedHealthCheckConfiguration *define.UpdateHealthCheckConfig) error {
+func (c *Container) Update(resources *spec.LinuxResources, restartPolicy *string, restartRetries *uint) error {
 	if !c.batched {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -134,41 +133,6 @@ func (c *Container) Update(resources *spec.LinuxResources, restartPolicy *string
 		return fmt.Errorf("container %s is being removed, cannot update: %w", c.ID(), define.ErrCtrStateInvalid)
 	}
 
-	healthCheckConfig, changedHealthCheck, err := GetNewHealthCheckConfig(&HealthCheckConfig{Schema2HealthConfig: c.HealthCheckConfig()}, *changedHealthCheckConfiguration)
-	if err != nil {
-		return err
-	}
-	if changedHealthCheck {
-		if err := c.updateHealthCheck(
-			healthCheckConfig,
-			&HealthCheckConfig{Schema2HealthConfig: c.config.HealthCheckConfig},
-		); err != nil {
-			return err
-		}
-	}
-
-	startupHealthCheckConfig, changedStartupHealthCheck, err := GetNewHealthCheckConfig(&StartupHealthCheckConfig{StartupHealthCheck: c.Config().StartupHealthCheckConfig}, *changedHealthCheckConfiguration)
-	if err != nil {
-		return err
-	}
-	if changedStartupHealthCheck {
-		if err := c.updateHealthCheck(
-			startupHealthCheckConfig,
-			&StartupHealthCheckConfig{StartupHealthCheck: c.config.StartupHealthCheckConfig},
-		); err != nil {
-			return err
-		}
-	}
-
-	globalHealthCheckOptions, err := changedHealthCheckConfiguration.GetNewGlobalHealthCheck()
-	if err != nil {
-		return err
-	}
-	if err := c.updateGlobalHealthCheckConfiguration(globalHealthCheckOptions); err != nil {
-		return err
-	}
-
-	defer c.newContainerEvent(events.Update)
 	return c.update(resources, restartPolicy, restartRetries)
 }
 

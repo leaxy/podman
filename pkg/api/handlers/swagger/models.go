@@ -54,6 +54,4 @@ type networkUpdateRequestLibpod entities.NetworkUpdateOptions
 
 // Container update
 // swagger:model
-type containerUpdateRequest struct {
-	container.UpdateConfig
-}
+type containerUpdateRequest container.UpdateConfig

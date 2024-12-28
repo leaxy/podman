@@ -482,10 +482,7 @@ func parseBridgeNetworkOptions(opts string) (types.PerNetworkOptions, error) {
 			netOpts.InterfaceName = value
 
 		default:
-			if netOpts.Options == nil {
-				netOpts.Options = make(map[string]string)
-			}
-			netOpts.Options[name] = value
+			return netOpts, fmt.Errorf("unknown bridge network option: %s", name)
 		}
 	}
 	return netOpts, nil

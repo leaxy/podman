@@ -3,9 +3,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/containers/podman/v5/pkg/machine/define"
 	"github.com/containers/podman/v5/pkg/machine/env"
@@ -53,7 +55,16 @@ func getMachineConn(connectionURI string, parsedConnection *url.URL) (string, er
 		if err != nil {
 			return "", err
 		}
-		return extractConnectionString(podmanSocket, podmanPipe)
+		if machineProvider.VMType() == define.WSLVirt || machineProvider.VMType() == define.HyperVVirt {
+			if podmanPipe == nil {
+				return "", errors.New("pipe of machine is not set")
+			}
+			return strings.Replace(podmanPipe.Path, `\\.\pipe\`, "npipe:////./pipe/", 1), nil
+		}
+		if podmanSocket == nil {
+			return "", errors.New("socket of machine is not set")
+		}
+		return "unix://" + podmanSocket.Path, nil
 	}
 	return "", fmt.Errorf("could not find a matching machine for connection %q", connectionURI)
 }

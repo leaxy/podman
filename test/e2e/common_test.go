@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -412,7 +413,7 @@ func PodmanTestCreateUtil(tempDir string, remote bool) *PodmanTestIntegration {
 	return p
 }
 
-func (p *PodmanTestIntegration) AddImageToRWStore(image string) {
+func (p PodmanTestIntegration) AddImageToRWStore(image string) {
 	if err := p.RestoreArtifact(image); err != nil {
 		logrus.Errorf("Unable to restore %s to RW store", image)
 	}
@@ -662,14 +663,14 @@ func (p *PodmanTestIntegration) RunLsContainerInPod(name, pod string) (*PodmanSe
 
 // BuildImage uses podman build and buildah to build an image
 // called imageName based on a string dockerfile
-func (p *PodmanTestIntegration) BuildImage(dockerfile, imageName string, layers string, extraOptions ...string) string {
-	return p.buildImage(dockerfile, imageName, layers, "", extraOptions)
+func (p *PodmanTestIntegration) BuildImage(dockerfile, imageName string, layers string) string {
+	return p.buildImage(dockerfile, imageName, layers, "")
 }
 
 // BuildImageWithLabel uses podman build and buildah to build an image
 // called imageName based on a string dockerfile, adds desired label to paramset
-func (p *PodmanTestIntegration) BuildImageWithLabel(dockerfile, imageName string, layers string, label string, extraOptions ...string) string {
-	return p.buildImage(dockerfile, imageName, layers, label, extraOptions)
+func (p *PodmanTestIntegration) BuildImageWithLabel(dockerfile, imageName string, layers string, label string) string {
+	return p.buildImage(dockerfile, imageName, layers, label)
 }
 
 // PodmanPID execs podman and returns its PID
@@ -922,10 +923,10 @@ func SkipIfNotSystemd(manager, reason string) {
 	}
 }
 
-func SkipOnOSVersion(os, version string, reason string) {
+func SkipOnOSVersion(os, version string) {
 	info := GetHostDistributionInfo()
 	if info.Distribution == os && info.Version == version {
-		Skip(fmt.Sprintf("[%s %s]: %s", os, version, reason))
+		Skip(fmt.Sprintf("Test doesn't work on %s %s", os, version))
 	}
 }
 
@@ -1298,7 +1299,7 @@ func (s *PodmanSessionIntegration) jq(jqCommand string) (string, error) {
 	return strings.TrimRight(out.String(), "\n"), err
 }
 
-func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers string, label string, extraOptions []string) string {
+func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers string, label string) string {
 	dockerfilePath := filepath.Join(p.TempDir, "Dockerfile-"+stringid.GenerateRandomID())
 	err := os.WriteFile(dockerfilePath, []byte(dockerfile), 0755)
 	Expect(err).ToNot(HaveOccurred())
@@ -1308,9 +1309,6 @@ func (p *PodmanTestIntegration) buildImage(dockerfile, imageName string, layers 
 	}
 	if len(imageName) > 0 {
 		cmd = append(cmd, []string{"-t", imageName}...)
-	}
-	if len(extraOptions) > 0 {
-		cmd = append(cmd, extraOptions...)
 	}
 	cmd = append(cmd, p.TempDir)
 	session := p.Podman(cmd)
@@ -1468,6 +1466,11 @@ func CopyDirectory(srcDir, dest string) error {
 			return err
 		}
 
+		stat, ok := fileInfo.Sys().(*syscall.Stat_t)
+		if !ok {
+			return fmt.Errorf("failed to get raw syscall.Stat_t data for %q", sourcePath)
+		}
+
 		switch fileInfo.Mode() & os.ModeType {
 		case os.ModeDir:
 			if err := os.MkdirAll(destPath, 0755); err != nil {
@@ -1484,6 +1487,10 @@ func CopyDirectory(srcDir, dest string) error {
 			if err := Copy(sourcePath, destPath); err != nil {
 				return err
 			}
+		}
+
+		if err := os.Lchown(destPath, int(stat.Uid), int(stat.Gid)); err != nil {
+			return err
 		}
 
 		fInfo, err := entry.Info()

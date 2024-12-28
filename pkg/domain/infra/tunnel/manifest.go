@@ -131,41 +131,24 @@ func (ir *ImageEngine) ManifestAnnotate(ctx context.Context, name, images string
 	options := new(manifests.ModifyOptions).WithArch(opts.Arch).WithVariant(opts.Variant)
 	options.WithFeatures(opts.Features).WithOS(opts.OS).WithOSVersion(opts.OSVersion)
 
-	annotations, err := mergeAnnotations(opts.Annotations, opts.Annotation)
-	if err != nil {
-		return "", err
+	if len(opts.Annotation) != 0 {
+		annotations := make(map[string]string)
+		for _, annotationSpec := range opts.Annotation {
+			key, val, hasVal := strings.Cut(annotationSpec, "=")
+			if !hasVal {
+				return "", fmt.Errorf("no value given for annotation %q", key)
+			}
+			annotations[key] = val
+		}
+		opts.Annotations = envLib.Join(opts.Annotations, annotations)
 	}
-	options.WithAnnotations(annotations)
-
-	indexAnnotations, err := mergeAnnotations(opts.IndexAnnotations, opts.IndexAnnotation)
-	if err != nil {
-		return "", err
-	}
-	options.WithIndexAnnotations(indexAnnotations)
+	options.WithAnnotations(opts.Annotations)
 
 	id, err := manifests.Annotate(ir.ClientCtx, name, []string{images}, options)
 	if err != nil {
 		return id, fmt.Errorf("annotating to manifest list %s: %w", name, err)
 	}
 	return id, nil
-}
-
-func mergeAnnotations(preferred map[string]string, aux []string) (map[string]string, error) {
-	if len(aux) != 0 {
-		auxAnnotations := make(map[string]string)
-		for _, annotationSpec := range aux {
-			key, val, hasVal := strings.Cut(annotationSpec, "=")
-			if !hasVal {
-				return nil, fmt.Errorf("no value given for annotation %q", key)
-			}
-			auxAnnotations[key] = val
-		}
-		if preferred == nil {
-			preferred = make(map[string]string)
-		}
-		preferred = envLib.Join(auxAnnotations, preferred)
-	}
-	return preferred, nil
 }
 
 // ManifestRemoveDigest removes the digest from manifest list

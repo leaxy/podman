@@ -2,12 +2,10 @@ package config
 
 import (
 	"fmt"
-	"math"
 	"net"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // The VirtioDevice interface is an interface which is implemented by all virtio devices.
@@ -49,43 +47,37 @@ type VirtioGPU struct {
 type VirtioVsock struct {
 	// Port is the virtio-vsock port used for this device, see `man vsock` for more
 	// details.
-	Port uint32 `json:"port"`
+	Port uint
 	// SocketURL is the path to a unix socket on the host to use for the virtio-vsock communication with the guest.
-	SocketURL string `json:"socketURL"`
+	SocketURL string
 	// If true, vsock connections will have to be done from guest to host. If false, vsock connections will only be possible
 	// from host to guest
-	Listen bool `json:"listen,omitempty"`
+	Listen bool
 }
 
 // VirtioBlk configures a disk device.
 type VirtioBlk struct {
 	StorageConfig
-	DeviceIdentifier string `json:"deviceIdentifier,omitempty"`
+	DeviceIdentifier string
 }
 
 type DirectorySharingConfig struct {
-	MountTag string `json:"mountTag"`
+	MountTag string
 }
 
 // VirtioFs configures directory sharing between the guest and the host.
 type VirtioFs struct {
 	DirectorySharingConfig
-	SharedDir string `json:"sharedDir"`
+	SharedDir string
 }
 
 // RosettaShare configures rosetta support in the guest to run Intel binaries on Apple CPUs
 type RosettaShare struct {
 	DirectorySharingConfig
-	InstallRosetta  bool `json:"installRosetta"`
-	IgnoreIfMissing bool `json:"ignoreIfMissing"`
+	InstallRosetta bool
 }
 
-// NVMExpressController configures a NVMe controller in the guest
-type NVMExpressController struct {
-	StorageConfig
-}
-
-// VirtioRng configures a random number generator (RNG) device.
+// virtioRng configures a random number generator (RNG) device.
 type VirtioRng struct {
 }
 
@@ -94,32 +86,19 @@ type VirtioRng struct {
 
 // VirtioNet configures the virtual machine networking.
 type VirtioNet struct {
-	Nat        bool             `json:"nat"`
-	MacAddress net.HardwareAddr `json:"-"` // custom marshaller in json.go
+	Nat        bool
+	MacAddress net.HardwareAddr
 	// file parameter is holding a connected datagram socket.
 	// see https://github.com/Code-Hex/vz/blob/7f648b6fb9205d6f11792263d79876e3042c33ec/network.go#L113-L155
-	Socket *os.File `json:"socket,omitempty"`
+	Socket *os.File
 
-	UnixSocketPath string `json:"unixSocketPath,omitempty"`
+	UnixSocketPath string
 }
 
 // VirtioSerial configures the virtual machine serial ports.
 type VirtioSerial struct {
-	LogFile   string `json:"logFile,omitempty"`
-	UsesStdio bool   `json:"usesStdio,omitempty"`
-}
-
-type NBDSynchronizationMode string
-
-const (
-	SynchronizationFullMode NBDSynchronizationMode = "full"
-	SynchronizationNoneMode NBDSynchronizationMode = "none"
-)
-
-type NetworkBlockDevice struct {
-	VirtioBlk
-	Timeout             time.Duration
-	SynchronizationMode NBDSynchronizationMode
+	LogFile   string
+	UsesStdio bool
 }
 
 // TODO: Add VirtioBalloon
@@ -164,8 +143,6 @@ func deviceFromCmdLine(deviceOpts string) (VirtioDevice, error) {
 	switch opts[0] {
 	case "rosetta":
 		dev = &RosettaShare{}
-	case "nvme":
-		dev = nvmExpressControllerNewEmpty()
 	case "virtio-blk":
 		dev = virtioBlkNewEmpty()
 	case "virtio-fs":
@@ -184,8 +161,6 @@ func deviceFromCmdLine(deviceOpts string) (VirtioDevice, error) {
 		dev = &VirtioInput{}
 	case "virtio-gpu":
 		dev = &VirtioGPU{}
-	case "nbd":
-		dev = networkBlockDeviceNewEmpty()
 	default:
 		return nil, fmt.Errorf("unknown device type: %s", opts[0])
 	}
@@ -288,7 +263,7 @@ func (dev *VirtioInput) FromOptions(options []option) error {
 		switch option.key {
 		case VirtioInputPointingDevice, VirtioInputKeyboardDevice:
 			if option.value != "" {
-				return fmt.Errorf("unexpected value for virtio-input %s option: %s", option.key, option.value)
+				return fmt.Errorf(fmt.Sprintf("unexpected value for virtio-input %s option: %s", option.key, option.value))
 			}
 			dev.InputType = option.key
 		default:
@@ -333,14 +308,14 @@ func (dev *VirtioGPU) FromOptions(options []option) error {
 		case VirtioGPUResolutionHeight:
 			height, err := strconv.Atoi(option.value)
 			if err != nil || height < 1 {
-				return fmt.Errorf("Invalid value for virtio-gpu %s: %s", option.key, option.value)
+				return fmt.Errorf(fmt.Sprintf("Invalid value for virtio-gpu %s: %s", option.key, option.value))
 			}
 
 			dev.Height = height
 		case VirtioGPUResolutionWidth:
 			width, err := strconv.Atoi(option.value)
 			if err != nil || width < 1 {
-				return fmt.Errorf("Invalid value for virtio-gpu %s: %s", option.key, option.value)
+				return fmt.Errorf(fmt.Sprintf("Invalid value for virtio-gpu %s: %s", option.key, option.value))
 			}
 
 			dev.Width = width
@@ -374,7 +349,7 @@ func VirtioNetNew(macAddress string) (*VirtioNet, error) {
 	}, nil
 }
 
-// SetSocket Set the socket to use for the network communication
+// Set the socket to use for the network communication
 //
 // This maps the virtual machine network interface to a connected datagram
 // socket. This means all network traffic on this interface will go through
@@ -477,23 +452,6 @@ func (dev *VirtioRng) FromOptions(options []option) error {
 	return nil
 }
 
-func nvmExpressControllerNewEmpty() *NVMExpressController {
-	return &NVMExpressController{
-		StorageConfig: StorageConfig{
-			DevName: "nvme",
-		},
-	}
-}
-
-// NVMExpressControllerNew creates a new NVMExpress controller to use in the
-// virtual machine. It will use the file at imagePath as the disk image. This
-// image must be in raw format.
-func NVMExpressControllerNew(imagePath string) (*NVMExpressController, error) {
-	r := nvmExpressControllerNewEmpty()
-	r.ImagePath = imagePath
-	return r, nil
-}
-
 func virtioBlkNewEmpty() *VirtioBlk {
 	return &VirtioBlk{
 		StorageConfig: StorageConfig{
@@ -550,11 +508,8 @@ func (dev *VirtioBlk) ToCmdLine() ([]string, error) {
 // When listen is true, the host will be listening for connections over vsock.
 // When listen  is false, the guest will be listening for connections over vsock.
 func VirtioVsockNew(port uint, socketURL string, listen bool) (VirtioDevice, error) {
-	if port > math.MaxUint32 {
-		return nil, fmt.Errorf("invalid vsock port: %d", port)
-	}
 	return &VirtioVsock{
-		Port:      uint32(port), //#nosec G115 -- was compared to math.MaxUint32
+		Port:      port,
 		SocketURL: socketURL,
 		Listen:    listen,
 	}, nil
@@ -581,11 +536,11 @@ func (dev *VirtioVsock) FromOptions(options []option) error {
 		case "socketURL":
 			dev.SocketURL = option.value
 		case "port":
-			port, err := strconv.ParseUint(option.value, 10, 32)
+			port, err := strconv.Atoi(option.value)
 			if err != nil {
 				return err
 			}
-			dev.Port = uint32(port) //#nosec G115 -- ParseUint(_, _, 32) guarantees no overflow
+			dev.Port = uint(port)
 		case "listen":
 			dev.Listen = true
 		case "connect":
@@ -634,7 +589,7 @@ func (dev *VirtioFs) FromOptions(options []option) error {
 	return nil
 }
 
-// RosettaShareNew RosettaShare creates a new rosetta share for running x86_64 binaries on M1 machines.
+// RosettaShare creates a new rosetta share for running x86_64 binaries on M1 machines.
 // It will share a directory containing the linux rosetta binaries with the
 // virtual machine. This directory can be mounted in the VM using `mount -t
 // virtiofs mountTag /some/dir`
@@ -656,9 +611,6 @@ func (dev *RosettaShare) ToCmdLine() ([]string, error) {
 	if dev.InstallRosetta {
 		builder.WriteString(",install")
 	}
-	if dev.IgnoreIfMissing {
-		builder.WriteString(",ignore-if-missing")
-	}
 
 	return []string{"--device", builder.String()}, nil
 }
@@ -670,86 +622,11 @@ func (dev *RosettaShare) FromOptions(options []option) error {
 			dev.MountTag = option.value
 		case "install":
 			dev.InstallRosetta = true
-		case "ignore-if-missing":
-			dev.IgnoreIfMissing = true
 		default:
 			return fmt.Errorf("unknown option for rosetta share: %s", option.key)
 		}
 	}
 	return nil
-}
-
-func networkBlockDeviceNewEmpty() *NetworkBlockDevice {
-	return &NetworkBlockDevice{
-		VirtioBlk: VirtioBlk{
-			StorageConfig: StorageConfig{
-				DevName: "nbd",
-			},
-			DeviceIdentifier: "",
-		},
-		Timeout:             time.Duration(15000 * time.Millisecond), // set a default timeout to 15s
-		SynchronizationMode: SynchronizationFullMode,                 // default mode to full
-	}
-}
-
-// NetworkBlockDeviceNew creates a new disk by connecting to a remote Network Block Device (NBD) server.
-// The provided uri must be in the format <scheme>://<address>/<export-name>
-// where scheme could have any of these value: nbd, nbds, nbd+unix and nbds+unix.
-// More info can be found at https://github.com/NetworkBlockDevice/nbd/blob/master/doc/uri.md
-// This allows the virtual machine to access and use the remote storage as if it were a local disk.
-func NetworkBlockDeviceNew(uri string, timeout uint32, synchronization NBDSynchronizationMode) (*NetworkBlockDevice, error) {
-	nbd := networkBlockDeviceNewEmpty()
-	nbd.URI = uri
-	nbd.Timeout = time.Duration(timeout) * time.Millisecond
-	nbd.SynchronizationMode = synchronization
-
-	return nbd, nil
-}
-
-func (nbd *NetworkBlockDevice) ToCmdLine() ([]string, error) {
-	cmdLine, err := nbd.VirtioBlk.ToCmdLine()
-	if err != nil {
-		return []string{}, err
-	}
-	if len(cmdLine) != 2 {
-		return []string{}, fmt.Errorf("unexpected storage config commandline")
-	}
-
-	if nbd.Timeout.Milliseconds() > 0 {
-		cmdLine[1] = fmt.Sprintf("%s,timeout=%d", cmdLine[1], nbd.Timeout.Milliseconds())
-	}
-	if nbd.SynchronizationMode == "none" || nbd.SynchronizationMode == "full" {
-		cmdLine[1] = fmt.Sprintf("%s,sync=%s", cmdLine[1], nbd.SynchronizationMode)
-	}
-
-	return cmdLine, nil
-}
-
-func (nbd *NetworkBlockDevice) FromOptions(options []option) error {
-	unhandledOpts := []option{}
-	for _, option := range options {
-		switch option.key {
-		case "timeout":
-			timeoutMS, err := strconv.ParseInt(option.value, 10, 32)
-			if err != nil {
-				return err
-			}
-			nbd.Timeout = time.Duration(timeoutMS) * time.Millisecond
-		case "sync":
-			switch option.value {
-			case string(SynchronizationFullMode):
-				nbd.SynchronizationMode = SynchronizationFullMode
-			case string(SynchronizationNoneMode):
-				nbd.SynchronizationMode = SynchronizationNoneMode
-			default:
-				return fmt.Errorf("invalid sync mode: %s, must be 'full' or 'none'", option.value)
-			}
-		default:
-			unhandledOpts = append(unhandledOpts, option)
-		}
-	}
-
-	return nbd.VirtioBlk.FromOptions(unhandledOpts)
 }
 
 type USBMassStorage struct {
@@ -766,44 +643,25 @@ func usbMassStorageNewEmpty() *USBMassStorage {
 
 // USBMassStorageNew creates a new USB disk to use in the virtual machine. It will use
 // the file at imagePath as the disk image. This image must be in raw or ISO format.
-func USBMassStorageNew(imagePath string) (*USBMassStorage, error) {
+func USBMassStorageNew(imagePath string) (VMComponent, error) {
 	usbMassStorage := usbMassStorageNewEmpty()
 	usbMassStorage.ImagePath = imagePath
 
 	return usbMassStorage, nil
 }
 
-func (dev *USBMassStorage) SetReadOnly(readOnly bool) {
-	dev.StorageConfig.ReadOnly = readOnly
-}
-
 // StorageConfig configures a disk device.
 type StorageConfig struct {
-	DevName   string `json:"devName"`
-	ImagePath string `json:"imagePath,omitempty"`
-	URI       string `json:"uri,omitempty"`
-	ReadOnly  bool   `json:"readOnly,omitempty"`
+	DevName   string
+	ImagePath string
+	ReadOnly  bool
 }
 
 func (config *StorageConfig) ToCmdLine() ([]string, error) {
-	if config.ImagePath != "" && config.URI != "" {
-		return nil, fmt.Errorf("%s devices cannot have both path to a disk image and a uri to a remote block device", config.DevName)
+	if config.ImagePath == "" {
+		return nil, fmt.Errorf("%s devices need the path to a disk image", config.DevName)
 	}
-	if config.ImagePath == "" && config.URI == "" {
-		return nil, fmt.Errorf("%s devices need a path to a disk image or a uri to a remote block device", config.DevName)
-	}
-	var value string
-	if config.ImagePath != "" {
-		value = fmt.Sprintf("%s,path=%s", config.DevName, config.ImagePath)
-	}
-	if config.URI != "" {
-		value = fmt.Sprintf("%s,uri=%s", config.DevName, config.URI)
-	}
-
-	if config.ReadOnly {
-		value += ",readonly"
-	}
-	return []string{"--device", value}, nil
+	return []string{"--device", fmt.Sprintf("%s,path=%s", config.DevName, config.ImagePath)}, nil
 }
 
 func (config *StorageConfig) FromOptions(options []option) error {
@@ -811,13 +669,6 @@ func (config *StorageConfig) FromOptions(options []option) error {
 		switch option.key {
 		case "path":
 			config.ImagePath = option.value
-		case "uri":
-			config.URI = option.value
-		case "readonly":
-			if option.value != "" {
-				return fmt.Errorf("unexpected value for virtio-blk 'readonly' option: %s", option.value)
-			}
-			config.ReadOnly = true
 		default:
 			return fmt.Errorf("unknown option for %s devices: %s", config.DevName, option.key)
 		}

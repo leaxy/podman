@@ -1633,8 +1633,7 @@ func (ic *ContainerEngine) ContainerStats(ctx context.Context, namesOrIds []stri
 						// update the container state
 						// https://github.com/containers/podman/issues/23334
 						(errors.Is(err, define.ErrCtrRemoved) || errors.Is(err, define.ErrNoSuchCtr) ||
-							errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrCtrStopped) ||
-							errors.Is(err, define.ErrNoCgroups)) {
+							errors.Is(err, define.ErrCtrStateInvalid) || errors.Is(err, define.ErrCtrStopped)) {
 						continue
 					}
 					return nil, err
@@ -1792,7 +1791,14 @@ func (ic *ContainerEngine) ContainerClone(ctx context.Context, ctrCloneOpts enti
 
 // ContainerUpdate finds and updates the given container's cgroup config with the specified options
 func (ic *ContainerEngine) ContainerUpdate(ctx context.Context, updateOptions *entities.ContainerUpdateOptions) (string, error) {
-	updateOptions.ProcessSpecgen()
+	err := specgen.WeightDevices(updateOptions.Specgen)
+	if err != nil {
+		return "", err
+	}
+	err = specgen.FinishThrottleDevices(updateOptions.Specgen)
+	if err != nil {
+		return "", err
+	}
 	containers, err := getContainers(ic.Libpod, getContainersOptions{names: []string{updateOptions.NameOrID}})
 	if err != nil {
 		return "", err
@@ -1800,14 +1806,13 @@ func (ic *ContainerEngine) ContainerUpdate(ctx context.Context, updateOptions *e
 	if len(containers) != 1 {
 		return "", fmt.Errorf("container not found")
 	}
-	container := containers[0].Container
 
-	resourceLimits, err := specgenutil.UpdateMajorAndMinorNumbers(updateOptions.Resources, updateOptions.DevicesLimits)
-	if err != nil {
-		return "", err
+	var restartPolicy *string
+	if updateOptions.Specgen.RestartPolicy != "" {
+		restartPolicy = &updateOptions.Specgen.RestartPolicy
 	}
 
-	if err = container.Update(resourceLimits, updateOptions.RestartPolicy, updateOptions.RestartRetries, updateOptions.ChangedHealthCheckConfiguration); err != nil {
+	if err = containers[0].Update(updateOptions.Specgen.ResourceLimits, restartPolicy, updateOptions.Specgen.RestartRetries); err != nil {
 		return "", err
 	}
 	return containers[0].ID(), nil

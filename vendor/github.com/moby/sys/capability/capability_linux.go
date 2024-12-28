@@ -117,13 +117,6 @@ func newPid(pid int) (c Capabilities, retErr error) {
 	return
 }
 
-func ignoreEINVAL(err error) error {
-	if errors.Is(err, syscall.EINVAL) {
-		err = nil
-	}
-	return err
-}
-
 type capsV3 struct {
 	hdr     capHeader
 	data    [2]capData
@@ -314,15 +307,15 @@ func (c *capsV3) Load() (err error) {
 			}
 			break
 		}
-		if val, ok := strings.CutPrefix(line, "CapBnd:\t"); ok {
-			_, err = fmt.Sscanf(val, "%08x%08x", &c.bounds[1], &c.bounds[0])
+		if strings.HasPrefix(line, "CapB") {
+			_, err = fmt.Sscanf(line[4:], "nd:  %08x%08x", &c.bounds[1], &c.bounds[0])
 			if err != nil {
 				break
 			}
 			continue
 		}
-		if val, ok := strings.CutPrefix(line, "CapAmb:\t"); ok {
-			_, err = fmt.Sscanf(val, "%08x%08x", &c.ambient[1], &c.ambient[0])
+		if strings.HasPrefix(line, "CapA") {
+			_, err = fmt.Sscanf(line[4:], "mb:  %08x%08x", &c.ambient[1], &c.ambient[0])
 			if err != nil {
 				break
 			}
@@ -334,10 +327,7 @@ func (c *capsV3) Load() (err error) {
 	return
 }
 
-func (c *capsV3) Apply(kind CapType) error {
-	if c.hdr.pid != 0 {
-		return errors.New("unable to modify capabilities of another process")
-	}
+func (c *capsV3) Apply(kind CapType) (err error) {
 	last, err := LastCap()
 	if err != nil {
 		return err
@@ -346,17 +336,21 @@ func (c *capsV3) Apply(kind CapType) error {
 		var data [2]capData
 		err = capget(&c.hdr, &data[0])
 		if err != nil {
-			return err
+			return
 		}
 		if (1<<uint(CAP_SETPCAP))&data[0].effective != 0 {
 			for i := Cap(0); i <= last; i++ {
 				if c.Get(BOUNDING, i) {
 					continue
 				}
-				// Ignore EINVAL since the capability may not be supported in this system.
-				err = ignoreEINVAL(dropBound(i))
+				err = prctl(syscall.PR_CAPBSET_DROP, uintptr(i), 0, 0, 0)
 				if err != nil {
-					return err
+					// Ignore EINVAL since the capability may not be supported in this system.
+					if err == syscall.EINVAL { //nolint:errorlint // Errors from syscall are bare.
+						err = nil
+						continue
+					}
+					return
 				}
 			}
 		}
@@ -365,73 +359,29 @@ func (c *capsV3) Apply(kind CapType) error {
 	if kind&CAPS == CAPS {
 		err = capset(&c.hdr, &c.data[0])
 		if err != nil {
-			return err
+			return
 		}
 	}
 
 	if kind&AMBS == AMBS {
-		// Ignore EINVAL as not supported on kernels before 4.3
-		err = ignoreEINVAL(resetAmbient())
-		if err != nil {
-			return err
-		}
 		for i := Cap(0); i <= last; i++ {
-			if !c.Get(AMBIENT, i) {
-				continue
+			action := pr_CAP_AMBIENT_LOWER
+			if c.Get(AMBIENT, i) {
+				action = pr_CAP_AMBIENT_RAISE
 			}
-			// Ignore EINVAL as not supported on kernels before 4.3
-			err = ignoreEINVAL(setAmbient(true, i))
+			err = prctl(pr_CAP_AMBIENT, action, uintptr(i), 0, 0)
 			if err != nil {
-				return err
+				// Ignore EINVAL as not supported on kernels before 4.3
+				if err == syscall.EINVAL { //nolint:errorlint // Errors from syscall are bare.
+					err = nil
+					continue
+				}
+				return
 			}
 		}
 	}
 
-	return nil
-}
-
-func getAmbient(c Cap) (bool, error) {
-	res, err := prctlRetInt(pr_CAP_AMBIENT, pr_CAP_AMBIENT_IS_SET, uintptr(c))
-	if err != nil {
-		return false, err
-	}
-	return res > 0, nil
-}
-
-func setAmbient(raise bool, caps ...Cap) error {
-	op := pr_CAP_AMBIENT_RAISE
-	if !raise {
-		op = pr_CAP_AMBIENT_LOWER
-	}
-	for _, val := range caps {
-		err := prctl(pr_CAP_AMBIENT, op, uintptr(val))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func resetAmbient() error {
-	return prctl(pr_CAP_AMBIENT, pr_CAP_AMBIENT_CLEAR_ALL, 0)
-}
-
-func getBound(c Cap) (bool, error) {
-	res, err := prctlRetInt(syscall.PR_CAPBSET_READ, uintptr(c), 0)
-	if err != nil {
-		return false, err
-	}
-	return res > 0, nil
-}
-
-func dropBound(caps ...Cap) error {
-	for _, val := range caps {
-		err := prctl(syscall.PR_CAPBSET_DROP, uintptr(val), 0)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return
 }
 
 func newFile(path string) (c Capabilities, err error) {

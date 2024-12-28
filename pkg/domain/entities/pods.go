@@ -368,7 +368,6 @@ func ToPodSpecGen(s specgen.PodSpecGenerator, p *PodCreateOptions) (*specgen.Pod
 		s.DNSOption = p.Net.DNSOptions
 		s.NoManageHosts = p.Net.NoHosts
 		s.HostAdd = p.Net.AddHosts
-		s.HostsFile = p.Net.HostsFile
 	}
 
 	// Cgroup

@@ -706,20 +706,14 @@ func ManifestModify(w http.ResponseWriter, r *http.Request) {
 		}
 	case strings.EqualFold("annotate", body.Operation):
 		options := body.ManifestAnnotateOptions
-		images := []string{""}
-		if len(body.Images) > 0 {
-			images = body.Images
-		}
-		for _, image := range images {
+		for _, image := range body.Images {
 			id, err := imageEngine.ManifestAnnotate(r.Context(), name, image, options)
 			if err != nil {
 				report.Errors = append(report.Errors, err)
 				continue
 			}
 			report.ID = id
-			if image != "" {
-				report.Images = append(report.Images, image)
-			}
+			report.Images = append(report.Images, image)
 		}
 	default:
 		utils.Error(w, http.StatusBadRequest, fmt.Errorf("illegal operation %q for %q", body.Operation, r.URL.String()))

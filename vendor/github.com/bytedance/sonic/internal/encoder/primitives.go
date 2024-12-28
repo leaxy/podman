@@ -23,7 +23,6 @@ import (
 
     `github.com/bytedance/sonic/internal/jit`
     `github.com/bytedance/sonic/internal/native`
-    `github.com/bytedance/sonic/internal/native/types`
     `github.com/bytedance/sonic/internal/rt`
 )
 
@@ -74,11 +73,15 @@ func encodeTypedPointer(buf *[]byte, vt *rt.GoType, vp *unsafe.Pointer, sb *_Sta
         return err
     } else if vt.Indirect() {
         rt.MoreStack(_FP_size + native.MaxFrameSize)
+        rt.StopProf()
         err := fn(buf, *vp, sb, fv)
+        rt.StartProf()
         return err
     } else {
         rt.MoreStack(_FP_size + native.MaxFrameSize)
+        rt.StopProf()
         err := fn(buf, unsafe.Pointer(vp), sb, fv)
+        rt.StartProf()
         return err
     }
 }
@@ -120,8 +123,8 @@ func htmlEscape(dst []byte, src []byte) []byte {
     dbuf := (*rt.GoSlice)(unsafe.Pointer(&dst))
 
     /* grow dst if it is shorter */
-    if cap(dst) - len(dst) < len(src) + types.BufPaddingSize {
-        cap :=  len(src) * 3 / 2 + types.BufPaddingSize
+    if cap(dst) - len(dst) < len(src) + native.BufPaddingSize {
+        cap :=  len(src) * 3 / 2 + native.BufPaddingSize
         *dbuf = growslice(typeByte, *dbuf, cap)
     }
 
@@ -151,17 +154,17 @@ var (
 )
 
 var (
-    _F_assertI2I = jit.Func(rt.AssertI2I2)
+    _F_assertI2I = jit.Func(assertI2I)
 )
 
 func asText(v unsafe.Pointer) (string, error) {
-    text := rt.AssertI2I2(_T_encoding_TextMarshaler, *(*rt.GoIface)(v))
+    text := assertI2I(_T_encoding_TextMarshaler, *(*rt.GoIface)(v))
     r, e := (*(*encoding.TextMarshaler)(unsafe.Pointer(&text))).MarshalText()
     return rt.Mem2Str(r), e
 }
 
 func asJson(v unsafe.Pointer) (string, error) {
-    text := rt.AssertI2I2(_T_json_Marshaler, *(*rt.GoIface)(v))
+    text := assertI2I(_T_json_Marshaler, *(*rt.GoIface)(v))
     r, e := (*(*json.Marshaler)(unsafe.Pointer(&text))).MarshalJSON()
     return rt.Mem2Str(r), e
 }

@@ -1,4 +1,4 @@
-//go:build linux || freebsd || windows
+//go:build linux || freebsd
 
 package qemu
 
@@ -39,15 +39,15 @@ var (
 	gvProxyMaxBackoffAttempts = 6
 )
 
-func (q *QEMUStubber) UserModeNetworkEnabled(*vmconfigs.MachineConfig) bool {
+func (q QEMUStubber) UserModeNetworkEnabled(*vmconfigs.MachineConfig) bool {
 	return true
 }
 
-func (q *QEMUStubber) UseProviderNetworkSetup() bool {
+func (q QEMUStubber) UseProviderNetworkSetup() bool {
 	return false
 }
 
-func (q *QEMUStubber) RequireExclusiveActive() bool {
+func (q QEMUStubber) RequireExclusiveActive() bool {
 	return true
 }
 

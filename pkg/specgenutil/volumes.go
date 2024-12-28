@@ -22,12 +22,6 @@ var (
 	errNoDest    = errors.New("must set volume destination")
 )
 
-type universalMount struct {
-	mount spec.Mount
-	// Used only with Named Volume type mounts
-	subPath string
-}
-
 // Parse all volume-related options in the create config into a set of mounts
 // and named volumes to add to the container.
 // Handles --volumes, --mount, and --tmpfs flags.
@@ -259,10 +253,10 @@ func Mounts(mountFlag []string, configMounts []string) (map[string]spec.Mount, m
 	return finalMounts, finalNamedVolumes, finalImageVolumes, nil
 }
 
-func parseMountOptions(mountType string, args []string) (*universalMount, error) {
+func parseMountOptions(mountType string, args []string) (*spec.Mount, error) {
 	var setTmpcopyup, setRORW, setSuid, setDev, setExec, setRelabel, setOwnership, setSwap bool
 
-	mnt := new(universalMount)
+	mnt := spec.Mount{}
 	for _, arg := range args {
 		name, value, hasValue := strings.Cut(arg, "=")
 		switch name {
@@ -270,7 +264,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if mountType != define.TypeBind {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
 			}
-			mnt.mount.Options = append(mnt.mount.Options, define.TypeBind)
+			mnt.Options = append(mnt.Options, define.TypeBind)
 		case "bind-propagation":
 			if mountType != define.TypeBind {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
@@ -284,16 +278,16 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			default:
 				return nil, fmt.Errorf("invalid value %q", arg)
 			}
-			mnt.mount.Options = append(mnt.mount.Options, value)
+			mnt.Options = append(mnt.Options, value)
 		case "consistency":
 			// Often used on MACs and mistakenly on Linux platforms.
 			// Since Docker ignores this option so shall we.
 			continue
 		case "idmap":
 			if hasValue {
-				mnt.mount.Options = append(mnt.mount.Options, fmt.Sprintf("idmap=%s", value))
+				mnt.Options = append(mnt.Options, fmt.Sprintf("idmap=%s", value))
 			} else {
-				mnt.mount.Options = append(mnt.mount.Options, "idmap")
+				mnt.Options = append(mnt.Options, "idmap")
 			}
 		case "readonly", "ro", "rw":
 			if setRORW {
@@ -313,35 +307,35 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if hasValue {
 				switch strings.ToLower(value) {
 				case "true":
-					mnt.mount.Options = append(mnt.mount.Options, name)
+					mnt.Options = append(mnt.Options, name)
 				case "false":
 					// Set the opposite only for rw
 					// ro's opposite is the default
 					if name == "rw" {
-						mnt.mount.Options = append(mnt.mount.Options, "ro")
+						mnt.Options = append(mnt.Options, "ro")
 					}
 				}
 			} else {
-				mnt.mount.Options = append(mnt.mount.Options, name)
+				mnt.Options = append(mnt.Options, name)
 			}
 		case "nodev", "dev":
 			if setDev {
 				return nil, fmt.Errorf("cannot pass 'nodev' and 'dev' mnt.Options more than once: %w", errOptionArg)
 			}
 			setDev = true
-			mnt.mount.Options = append(mnt.mount.Options, name)
+			mnt.Options = append(mnt.Options, name)
 		case "noexec", "exec":
 			if setExec {
 				return nil, fmt.Errorf("cannot pass 'noexec' and 'exec' mnt.Options more than once: %w", errOptionArg)
 			}
 			setExec = true
-			mnt.mount.Options = append(mnt.mount.Options, name)
+			mnt.Options = append(mnt.Options, name)
 		case "nosuid", "suid":
 			if setSuid {
 				return nil, fmt.Errorf("cannot pass 'nosuid' and 'suid' mnt.Options more than once: %w", errOptionArg)
 			}
 			setSuid = true
-			mnt.mount.Options = append(mnt.mount.Options, name)
+			mnt.Options = append(mnt.Options, name)
 		case "noswap":
 			if setSwap {
 				return nil, fmt.Errorf("cannot pass 'noswap' mnt.Options more than once: %w", errOptionArg)
@@ -350,7 +344,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 				return nil, fmt.Errorf("the 'noswap' option is only allowed with rootful tmpfs mounts: %w", errOptionArg)
 			}
 			setSwap = true
-			mnt.mount.Options = append(mnt.mount.Options, name)
+			mnt.Options = append(mnt.Options, name)
 		case "relabel":
 			if setRelabel {
 				return nil, fmt.Errorf("cannot pass 'relabel' option more than once: %w", errOptionArg)
@@ -361,19 +355,19 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			}
 			switch value {
 			case "private":
-				mnt.mount.Options = append(mnt.mount.Options, "Z")
+				mnt.Options = append(mnt.Options, "Z")
 			case "shared":
-				mnt.mount.Options = append(mnt.mount.Options, "z")
+				mnt.Options = append(mnt.Options, "z")
 			default:
 				return nil, fmt.Errorf("%s mount option must be 'private' or 'shared': %w", name, util.ErrBadMntOption)
 			}
 		case "shared", "rshared", "private", "rprivate", "slave", "rslave", "unbindable", "runbindable", "Z", "z", "no-dereference":
-			mnt.mount.Options = append(mnt.mount.Options, name)
+			mnt.Options = append(mnt.Options, name)
 		case "src", "source":
 			if mountType == define.TypeTmpfs {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
 			}
-			if mnt.mount.Source != "" {
+			if mnt.Source != "" {
 				return nil, fmt.Errorf("cannot pass %q option more than once: %w", name, errOptionArg)
 			}
 			if !hasValue {
@@ -382,17 +376,9 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if len(value) == 0 {
 				return nil, fmt.Errorf("host directory cannot be empty: %w", errOptionArg)
 			}
-			mnt.mount.Source = value
-		case "subpath", "volume-subpath":
-			if mountType != define.TypeVolume {
-				return nil, fmt.Errorf("cannot set option %q on non-volume mounts", name)
-			}
-			if !hasValue {
-				return nil, fmt.Errorf("%v: %w", name, errOptionArg)
-			}
-			mnt.subPath = value
+			mnt.Source = value
 		case "target", "dst", "destination":
-			if mnt.mount.Destination != "" {
+			if mnt.Destination != "" {
 				return nil, fmt.Errorf("cannot pass %q option more than once: %w", name, errOptionArg)
 			}
 			if !hasValue {
@@ -401,7 +387,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if err := parse.ValidateVolumeCtrDir(value); err != nil {
 				return nil, err
 			}
-			mnt.mount.Destination = unixPathClean(value)
+			mnt.Destination = unixPathClean(value)
 		case "tmpcopyup", "notmpcopyup":
 			if mountType != define.TypeTmpfs {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
@@ -410,7 +396,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 				return nil, fmt.Errorf("cannot pass 'tmpcopyup' and 'notmpcopyup' mnt.Options more than once: %w", errOptionArg)
 			}
 			setTmpcopyup = true
-			mnt.mount.Options = append(mnt.mount.Options, name)
+			mnt.Options = append(mnt.Options, name)
 		case "tmpfs-mode":
 			if mountType != define.TypeTmpfs {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
@@ -418,7 +404,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if !hasValue {
 				return nil, fmt.Errorf("%v: %w", name, errOptionArg)
 			}
-			mnt.mount.Options = append(mnt.mount.Options, fmt.Sprintf("mode=%s", value))
+			mnt.Options = append(mnt.Options, fmt.Sprintf("mode=%s", value))
 		case "tmpfs-size":
 			if mountType != define.TypeTmpfs {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
@@ -426,7 +412,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if !hasValue {
 				return nil, fmt.Errorf("%v: %w", name, errOptionArg)
 			}
-			mnt.mount.Options = append(mnt.mount.Options, fmt.Sprintf("size=%s", value))
+			mnt.Options = append(mnt.Options, fmt.Sprintf("size=%s", value))
 		case "U", "chown":
 			if setOwnership {
 				return nil, fmt.Errorf("cannot pass 'U' or 'chown' option more than once: %w", errOptionArg)
@@ -436,7 +422,7 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 				return nil, err
 			}
 			if ok {
-				mnt.mount.Options = append(mnt.mount.Options, "U")
+				mnt.Options = append(mnt.Options, "U")
 			}
 			setOwnership = true
 		case "volume-label":
@@ -448,26 +434,25 @@ func parseMountOptions(mountType string, args []string) (*universalMount, error)
 			if mountType != define.TypeVolume {
 				return nil, fmt.Errorf("%q option not supported for %q mount types", name, mountType)
 			}
-			mnt.mount.Options = append(mnt.mount.Options, arg)
+			mnt.Options = append(mnt.Options, arg)
 		default:
 			return nil, fmt.Errorf("%s: %w", name, util.ErrBadMntOption)
 		}
 	}
-	if mountType != "glob" && len(mnt.mount.Destination) == 0 {
+	if mountType != "glob" && len(mnt.Destination) == 0 {
 		return nil, errNoDest
 	}
-	return mnt, nil
+	return &mnt, nil
 }
 
 // Parse glob mounts entry from the --mount flag.
 func getGlobMounts(args []string) ([]spec.Mount, error) {
 	mounts := []spec.Mount{}
 
-	uMnt, err := parseMountOptions("glob", args)
+	mnt, err := parseMountOptions("glob", args)
 	if err != nil {
 		return nil, err
 	}
-	mnt := uMnt.mount
 
 	globs, err := filepath.Glob(mnt.Source)
 	if err != nil {
@@ -503,11 +488,10 @@ func getBindMount(args []string) (spec.Mount, error) {
 		Type: define.TypeBind,
 	}
 	var err error
-	uMnt, err := parseMountOptions(newMount.Type, args)
+	mnt, err := parseMountOptions(newMount.Type, args)
 	if err != nil {
 		return newMount, err
 	}
-	mnt := uMnt.mount
 
 	if len(mnt.Destination) == 0 {
 		return newMount, errNoDest
@@ -535,11 +519,10 @@ func parseMemoryMount(args []string, mountType string) (spec.Mount, error) {
 	}
 
 	var err error
-	uMnt, err := parseMountOptions(newMount.Type, args)
+	mnt, err := parseMountOptions(newMount.Type, args)
 	if err != nil {
 		return newMount, err
 	}
-	mnt := uMnt.mount
 	if len(mnt.Destination) == 0 {
 		return newMount, errNoDest
 	}
@@ -593,14 +576,12 @@ func getNamedVolume(args []string) (*specgen.NamedVolume, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(mnt.mount.Destination) == 0 {
+	if len(mnt.Destination) == 0 {
 		return nil, errNoDest
 	}
-
-	newVolume.Options = mnt.mount.Options
-	newVolume.SubPath = mnt.subPath
-	newVolume.Name = mnt.mount.Source
-	newVolume.Dest = mnt.mount.Destination
+	newVolume.Options = mnt.Options
+	newVolume.Name = mnt.Source
+	newVolume.Dest = mnt.Destination
 	return newVolume, nil
 }
 

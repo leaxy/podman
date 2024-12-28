@@ -591,8 +591,6 @@ func generateUnitsInfoMap(units []*parser.UnitFile) map[string]*quadlet.UnitInfo
 		switch {
 		case strings.HasSuffix(unit.Filename, ".container"):
 			serviceName = quadlet.GetContainerServiceName(unit)
-			// Prefill resouceNames for .container files. This solves network reusing.
-			resourceName = quadlet.GetContainerResourceName(unit)
 		case strings.HasSuffix(unit.Filename, ".volume"):
 			serviceName = quadlet.GetVolumeServiceName(unit)
 		case strings.HasSuffix(unit.Filename, ".kube"):

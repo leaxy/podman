@@ -543,8 +543,6 @@ func (c *Container) generateInspectContainerHostConfig(ctrSpec *spec.Spec, named
 	hostConfig.GroupAdd = make([]string, 0, len(c.config.Groups))
 	hostConfig.GroupAdd = append(hostConfig.GroupAdd, c.config.Groups...)
 
-	hostConfig.HostsFile = c.config.BaseHostsFile
-
 	if ctrSpec.Process != nil {
 		if ctrSpec.Process.OOMScoreAdj != nil {
 			hostConfig.OomScoreAdj = *ctrSpec.Process.OOMScoreAdj

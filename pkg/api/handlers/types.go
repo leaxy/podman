@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/containers/podman/v5/libpod/define"
 	"github.com/containers/podman/v5/pkg/domain/entities"
 	docker "github.com/docker/docker/api/types"
 	dockerBackend "github.com/docker/docker/api/types/backend"
@@ -74,9 +73,7 @@ type LibpodContainersRmReport struct {
 // UpdateEntities used to wrap the oci resource spec in a swagger model
 // swagger:model
 type UpdateEntities struct {
-	specs.LinuxResources
-	define.UpdateHealthCheckConfig
-	define.UpdateContainerDevicesLimits
+	Resources *specs.LinuxResources
 }
 
 type Info struct {

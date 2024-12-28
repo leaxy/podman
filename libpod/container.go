@@ -47,38 +47,44 @@ const (
 	// InvalidNS is an invalid namespace
 	InvalidNS LinuxNS = iota
 	// IPCNS is the IPC namespace
-	IPCNS
+	IPCNS LinuxNS = iota
 	// MountNS is the mount namespace
-	MountNS
+	MountNS LinuxNS = iota
 	// NetNS is the network namespace
-	NetNS
+	NetNS LinuxNS = iota
 	// PIDNS is the PID namespace
-	PIDNS
+	PIDNS LinuxNS = iota
 	// UserNS is the user namespace
-	UserNS
+	UserNS LinuxNS = iota
 	// UTSNS is the UTS namespace
-	UTSNS
+	UTSNS LinuxNS = iota
 	// CgroupNS is the Cgroup namespace
-	CgroupNS
+	CgroupNS LinuxNS = iota
 )
 
 // String returns a string representation of a Linux namespace
 // It is guaranteed to be the name of the namespace in /proc for valid ns types
 func (ns LinuxNS) String() string {
-	s := [...]string{
-		InvalidNS: "invalid",
-		IPCNS:     "ipc",
-		MountNS:   "mnt",
-		NetNS:     "net",
-		PIDNS:     "pid",
-		UserNS:    "user",
-		UTSNS:     "uts",
-		CgroupNS:  "cgroup",
+	switch ns {
+	case InvalidNS:
+		return "invalid"
+	case IPCNS:
+		return "ipc"
+	case MountNS:
+		return "mnt"
+	case NetNS:
+		return "net"
+	case PIDNS:
+		return "pid"
+	case UserNS:
+		return "user"
+	case UTSNS:
+		return "uts"
+	case CgroupNS:
+		return "cgroup"
+	default:
+		return "unknown"
 	}
-	if ns >= 0 && int(ns) < len(s) {
-		return s[ns]
-	}
-	return "unknown"
 }
 
 // Container is a single OCI container.
@@ -251,7 +257,7 @@ type ContainerNamedVolume struct {
 	// This is used for emptyDir volumes from a kube yaml
 	IsAnonymous bool `json:"setAnonymous,omitempty"`
 	// SubPath determines which part of the Source will be mounted in the container
-	SubPath string `json:",omitempty"`
+	SubPath string
 }
 
 // ContainerOverlayVolume is an overlay volume that will be mounted into the

@@ -242,8 +242,7 @@ var _ = Describe("Podman events", func() {
 
 	It("podman events network connection", func() {
 		network := stringid.GenerateRandomID()
-		networkDriver := "bridge"
-		result := podmanTest.Podman([]string{"create", "--network", networkDriver, ALPINE, "top"})
+		result := podmanTest.Podman([]string{"create", "--network", "bridge", ALPINE, "top"})
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 		ctrID := result.OutputToString()
@@ -260,16 +259,11 @@ var _ = Describe("Podman events", func() {
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 
-		result = podmanTest.Podman([]string{"network", "rm", network})
-		result.WaitWithDefaultTimeout()
-		Expect(result).Should(ExitCleanly())
-
 		result = podmanTest.Podman([]string{"events", "--stream=false", "--since", "30s"})
 		result.WaitWithDefaultTimeout()
 		Expect(result).Should(ExitCleanly())
 
 		eventDetails := fmt.Sprintf(" %s (container=%s, name=%s)", ctrID, ctrID, network)
-		networkCreateRemoveDetails := fmt.Sprintf("(name=%s, type=%s)", network, networkDriver)
 		// Workaround for #23634, event order not guaranteed when remote.
 		// Although the issue is closed, the bug is a real one. It seems
 		// unlikely ever to be fixed.
@@ -280,11 +274,9 @@ var _ = Describe("Podman events", func() {
 			Expect(lines).To(MatchRegexp(" network connect .* network disconnect "))
 		} else {
 			lines := result.OutputToStringArray()
-			Expect(lines).To(HaveLen(7))
-			Expect(lines[3]).To(And(ContainSubstring("network create"), ContainSubstring(networkCreateRemoveDetails)))
-			Expect(lines[4]).To(ContainSubstring("network connect" + eventDetails))
-			Expect(lines[5]).To(ContainSubstring("network disconnect" + eventDetails))
-			Expect(lines[6]).To(And(ContainSubstring("network remove"), ContainSubstring(networkCreateRemoveDetails)))
+			Expect(lines).To(HaveLen(5))
+			Expect(lines[3]).To(ContainSubstring("network connect" + eventDetails))
+			Expect(lines[4]).To(ContainSubstring("network disconnect" + eventDetails))
 		}
 	})
 

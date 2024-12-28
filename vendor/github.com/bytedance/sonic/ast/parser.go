@@ -157,7 +157,7 @@ func (self *Parser) decodeArray(ret *linkedNodes) (Node, types.ParsingError) {
         }
 
         /* add the value to result */
-        ret.Push(val)
+        ret.Add(val)
         self.p = self.lspace(self.p)
 
         /* check for EOF */
@@ -244,7 +244,7 @@ func (self *Parser) decodeObject(ret *linkedPairs) (Node, types.ParsingError) {
 
         /* add the value to result */
         // FIXME: ret's address may change here, thus previous referred node in ret may be invalid !!
-        ret.Push(Pair{Key: key, Value: val})
+        ret.Add(Pair{Key: key, Value: val})
         self.p = self.lspace(self.p)
 
         /* check for EOF */
@@ -475,7 +475,7 @@ func (self *Node) skipNextNode() *Node {
     }
 
     /* add the value to result */
-    ret.Push(val)
+    ret.Add(val)
     self.l++
     parser.p = parser.lspace(parser.p)
 
@@ -558,7 +558,7 @@ func (self *Node) skipNextPair() (*Pair) {
     }
 
     /* add the value to result */
-    ret.Push(Pair{Key: key, Value: val})
+    ret.Add(Pair{Key: key, Value: val})
     self.l++
     parser.p = parser.lspace(parser.p)
 
@@ -652,9 +652,4 @@ func (self *Parser) ExportError(err types.ParsingError) error {
         Src : self.s,
         Code: err,
     }.Description())
-}
-
-func backward(src string, i int) int {
-    for ; i>=0 && isSpace(src[i]); i-- {}
-    return i
 }

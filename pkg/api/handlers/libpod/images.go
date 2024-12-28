@@ -107,7 +107,7 @@ func GetImage(w http.ResponseWriter, r *http.Request) {
 	options := &libimage.InspectOptions{WithParent: true, WithSize: true}
 	inspect, err := newImage.Inspect(r.Context(), options)
 	if err != nil {
-		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed in inspect image %s: %w", name, err))
+		utils.Error(w, http.StatusInternalServerError, fmt.Errorf("failed in inspect image %s: %w", inspect.ID, err))
 		return
 	}
 	utils.WriteResponse(w, http.StatusOK, inspect)
@@ -403,17 +403,14 @@ func ImagesImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer os.Remove(tmpfile.Name())
+		defer tmpfile.Close()
 
 		if _, err := io.Copy(tmpfile, r.Body); err != nil && err != io.EOF {
 			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("unable to write archive to temporary file: %w", err))
-			tmpfile.Close()
 			return
 		}
 
-		if err := tmpfile.Close(); err != nil {
-			utils.Error(w, http.StatusInternalServerError, fmt.Errorf("unable to close tempfile: %w", err))
-			return
-		}
+		tmpfile.Close()
 		source = tmpfile.Name()
 	}
 

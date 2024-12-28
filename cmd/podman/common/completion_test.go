@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//nolint:recvcheck // We like to test mixed pointer receiver and non-pointer receiver
 type Car struct {
 	Brand string
 	Stats struct {
